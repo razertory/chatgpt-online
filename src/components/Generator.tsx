@@ -4,6 +4,7 @@ import { generateSignature } from '@/utils/auth'
 import IconClear from './icons/Clear'
 import MessageItem from './MessageItem'
 import SystemRoleSettings from './SystemRoleSettings'
+import CryptoJS from 'crypto-js';
 import ErrorMessageItem from './ErrorMessageItem'
 import type { ChatMessage, ErrorMessage } from '@/types'
 
@@ -39,7 +40,7 @@ export default () => {
     localStorage.setItem('systemRoleSettings', currentSystemRoleSettings())
   }
 
-  const handleButtonClick = async() => {
+  const handleButtonClick = async () => {
     const inputValue = inputRef.value
     if (!inputValue)
       return
@@ -62,7 +63,7 @@ export default () => {
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
   }, 300, false, true)
 
-  const requestWithLatestMessage = async() => {
+  const requestWithLatestMessage = async () => {
     setLoading(true)
     setCurrentAssistantMessage('')
     setCurrentError(null)
@@ -77,18 +78,14 @@ export default () => {
           content: currentSystemRoleSettings(),
         })
       }
-      const timestamp = Date.now()
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        body: JSON.stringify({
-          messages: requestMessageList,
-          time: timestamp,
-          pass: storagePassword,
-          sign: await generateSignature({
-            t: timestamp,
-            m: requestMessageList?.[requestMessageList.length - 1]?.content || '',
-          }),
-        }),
+      const prompt = requestMessageList?.[requestMessageList.length - 1]?.content
+      const userId = await getOrdefaultUserId()
+      const time = Date.now()
+      const key = "kotaroai";
+      const base = `${time}${prompt}${userId}`
+      const token = CryptoJS.HmacSHA256(base, key).toString();
+      const response = await fetch(`https://api.vrtalk.io/stream/talk/v2?prompt=${prompt}&userId=${userId}&time=${time}&token=${token}`, {
+        method: 'GET',
         signal: controller.signal,
       })
       if (!response.ok) {
@@ -177,6 +174,19 @@ export default () => {
       handleButtonClick()
   }
 
+  const getOrdefaultUserId = () => {
+    const cookies = document.cookie.split('; ');
+    for (let i = 0; i < cookies.length; i++) {
+      const [key, value] = cookies[i].split('=');
+      if (key === "userId") {
+        return value;
+      }
+    }
+    const userId = CryptoJS.HmacSHA256(Date.now, "123").toString()
+    document.cookie = `userId=${userId}`
+    return userId
+  }
+
   return (
     <div my-6>
       <SystemRoleSettings
@@ -202,7 +212,7 @@ export default () => {
           message={currentAssistantMessage}
         />
       )}
-      { currentError() && <ErrorMessageItem data={currentError()} onRetry={retryLastFetch} /> }
+      {currentError() && <ErrorMessageItem data={currentError()} onRetry={retryLastFetch} />}
       <Show
         when={!loading()}
         fallback={() => (
