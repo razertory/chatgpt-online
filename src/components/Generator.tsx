@@ -182,7 +182,8 @@ export default () => {
         return value;
       }
     }
-    const userId = CryptoJS.HmacSHA256(Date.now(), "123").toString()
+    const base = `${Date.now()}`
+    const userId = CryptoJS.HmacSHA256(base, "123").toString()
     document.cookie = `userId=${userId}`
     return userId
   }
